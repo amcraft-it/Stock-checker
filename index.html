@@ -119,18 +119,27 @@ function $(id){return document.getElementById(id)}
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function fmtDate(d){if(!d)return'';try{var dt=new Date(d);return isNaN(dt)?esc(d):dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}catch(e){return esc(d)}}
 
-// GET request to Apps Script — works cross-origin because Apps Script
-// redirects to a script.googleusercontent.com URL that serves JSON with
-// proper CORS headers when accessed via a simple GET (no preflight needed)
+// XHR handles the Apps Script 302 redirect transparently
+// — no CORS preflight issues like with fetch()
 function apiCall(params){
-  var qs=Object.keys(params).map(function(k){
-    return encodeURIComponent(k)+'='+encodeURIComponent(
-      Array.isArray(params[k])?params[k].join(','):params[k]
-    );
-  }).join('&');
-  return fetch(API_URL+'?'+qs,{redirect:'follow'}).then(function(r){
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    return r.json();
+  return new Promise(function(resolve,reject){
+    var qs=Object.keys(params).map(function(k){
+      return encodeURIComponent(k)+'='+encodeURIComponent(
+        Array.isArray(params[k])?params[k].join(','):params[k]
+      );
+    }).join('&');
+    var xhr=new XMLHttpRequest();
+    xhr.open('GET',API_URL+'?'+qs,true);
+    xhr.onload=function(){
+      if(xhr.status>=200&&xhr.status<300){
+        try{resolve(JSON.parse(xhr.responseText))}
+        catch(e){reject(new Error('Invalid JSON'))}
+      }else{reject(new Error('HTTP '+xhr.status))}
+    };
+    xhr.onerror=function(){reject(new Error('Network error'))};
+    xhr.ontimeout=function(){reject(new Error('Timeout'))};
+    xhr.timeout=120000;
+    xhr.send();
   });
 }
 
