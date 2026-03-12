@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Checker — AM-Craft</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ═══════════════════════════════════════════
+       TOKENS
+       ═══════════════════════════════════════════ */
+    :root {
+      --navy: #0E1165;
+      --navy-mid: #1a1d8a;
+      --navy-glow: rgba(14,17,101,.07);
+      --accent: #3b82f6;
+      --accent-soft: rgba(59,130,246,.08);
+      --surface: #ffffff;
+      --bg: #f4f5fa;
+      --bg-warm: #f8f9fc;
+      --border: #e2e5f1;
+      --border-light: #eef0f6;
+      --txt: #1a1c3d;
+      --txt2: #5c5f7e;
+      --txt3: #9194ab;
+      --tag-bg: #eef0ff;
+      --tag-txt: #4338ca;
+      --green: #10b981;
+      --red: #ef4444;
+      --red-bg: #fef2f2;
+      --blue-bg: #eff6ff;
+      --shadow-s: 0 1px 3px rgba(14,17,101,.05);
+      --shadow-m: 0 4px 20px rgba(14,17,101,.07);
+      --r: 10px;
+      --r-lg: 16px;
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--txt);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ═══════════════════════════════════════════
+       TOPBAR
+       ═══════════════════════════════════════════ */
+    .topbar {
+      background: var(--navy);
+      height: 54px;
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .topbar-icon {
+      width: 26px; height: 26px;
+      background: rgba(255,255,255,.12);
+      border-radius: 5px;
+      display: grid; place-items: center;
+    }
+    .topbar-icon svg { width:14px; height:14px; fill:#fff; }
+    .topbar h1 {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: -.01em;
+    }
+    .topbar .pill {
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.45);
+      background: rgba(255,255,255,.08);
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    /* ═══════════════════════════════════════════
+       CONFIG BANNER (shows the API URL)
+       ═══════════════════════════════════════════ */
+    .config-banner {
+      background: #fffbe6;
+      border-bottom: 1px solid #fde68a;
+      padding: 10px 28px;
+      font-size: 13px;
+      color: #92400e;
+      display: none;          /* shown when API_URL not set */
+    }
+    .config-banner code {
+      background: rgba(0,0,0,.06);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+
+    /* ═══════════════════════════════════════════
+       LAYOUT
+       ═══════════════════════════════════════════ */
+    .main {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 26px 28px 64px;
+    }
+
+    /* ═══════════════════════════════════════════
+       SEARCH CARD
+       ═══════════════════════════════════════════ */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-s);
+      padding: 26px 30px 30px;
+      margin-bottom: 22px;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+    .card-head h2 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+    }
+    .card-head .sub {
+      font-size: 12.5px;
+      color: var(--txt3);
+      margin-left: auto;
+    }
+
+    /* ── fields ── */
+    .fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .fld { display: flex; flex-direction: column; gap: 5px; }
+    .fld-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--txt2);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .fld-input {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13.5px;
+      padding: 10px 13px;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--txt);
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .fld-input::placeholder {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12.5px;
+      color: var(--txt3);
+    }
+    .fld-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    /* ── locations ── */
+    .loc-panel {
+      background: var(--bg-warm);
+      border: 1px solid var(--border-light);
+      border-radius: var(--r);
+      padding: 14px 18px;
+      margin-bottom: 22px;
+    }
+    .loc-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .loc-toggle {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 3px 7px;
+      border-radius: 4px;
+      transition: background .15s;
+    }
+    .loc-toggle:hover { background: var(--accent-soft); }
+
+    .loc-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      max-height: 155px;
+      overflow-y: auto;
+      padding: 2px 0;
+    }
+    .loc-grid::-webkit-scrollbar { width: 4px; }
+    .loc-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 13px;
+      border: 1.5px solid var(--border);
+      border-radius: 100px;
+      cursor: pointer;
+      background: var(--surface);
+      transition: all .12s;
+      user-select: none;
+    }
+    .chip:hover { border-color: var(--accent); }
+    .chip.on {
+      background: var(--tag-bg);
+      border-color: var(--tag-txt);
+      color: var(--tag-txt);
+    }
+    .chip .dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: background .12s;
+    }
+    .chip.on .dot { background: var(--tag-txt); }
+    .chip span {
+      font-size: 12.5px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .chip input { display: none; }
+
+    .loc-msg {
+      font-size: 12.5px;
+      color: var(--txt3);
+      padding: 10px 0;
+    }
+
+    /* ── action row ── */
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .btn {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 11px 28px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: background .15s, transform .1s;
+    }
+    .btn-primary {
+      background: var(--navy);
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--navy-mid);
+      transform: translateY(-1px);
+    }
+    .btn-primary:active:not(:disabled) { transform: translateY(0); }
+    .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary svg { width:15px; height:15px; }
+
+    .btn-ghost {
+      background: none;
+      color: var(--txt3);
+      padding: 8px 12px;
+    }
+    .btn-ghost:hover {
+      color: var(--txt2);
+      background: var(--bg-warm);
+    }
+
+    /* ═══════════════════════════════════════════
+       MESSAGES / LOADING
+       ═══════════════════════════════════════════ */
+    .msg {
+      padding: 12px 16px;
+      border-radius: var(--r);
+      font-size: 13.5px;
+      font-weight: 500;
+      margin-bottom: 18px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    .msg.err { display:flex; background:var(--red-bg); border:1px solid #fecaca; color:#991b1b; }
+    .msg.inf { display:flex; background:var(--blue-bg); border:1px solid #bfdbfe; color:#1e40af; }
+
+    .loader {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 30px;
+      color: var(--txt3);
+      font-size: 13.5px;
+    }
+    .spin {
+      width: 18px; height: 18px;
+      border: 2.5px solid var(--border);
+      border-top-color: var(--navy);
+      border-radius: 50%;
+      animation: spin .65s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ═══════════════════════════════════════════
+       RESULTS TABLE
+       ═══════════════════════════════════════════ */
+    .results {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-s);
+      overflow: hidden;
+      display: none;
+      animation: up .25s ease;
+    }
+    @keyframes up {
+      from { opacity:0; transform:translateY(10px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    .results-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 22px;
+      border-bottom: 1px solid var(--border-light);
+      background: var(--bg-warm);
+    }
+    .results-bar b { font-size:13.5px; }
+    .results-bar b em { font-style:normal; color:var(--accent); }
+
+    .tbl-wrap { overflow-x: auto; }
+
+    table { width:100%; border-collapse:collapse; }
+    th {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--txt3);
+      padding: 13px 15px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-light);
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+    }
+    td {
+      font-size: 13px;
+      padding: 12px 15px;
+      border-bottom: 1px solid var(--border-light);
+      vertical-align: middle;
+    }
+    tr:hover td { background: var(--bg-warm); }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: -.01em;
+    }
+    .qty {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--navy);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11.5px;
+      font-weight: 500;
+      padding: 2px 9px;
+      background: var(--tag-bg);
+      color: var(--tag-txt);
+      border-radius: 100px;
+      white-space: nowrap;
+    }
+    .date {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      color: var(--txt2);
+    }
+
+    /* ── empty state ── */
+    .empty {
+      display: none;
+      text-align: center;
+      padding: 44px 24px;
+      animation: up .25s ease;
+    }
+    .empty-ring {
+      width: 46px; height: 46px;
+      background: var(--bg-warm);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      margin: 0 auto 14px;
+    }
+    .empty-ring svg { width:22px; height:22px; color:var(--txt3); }
+    .empty h3 { font-size:14.5px; font-weight:600; margin-bottom:4px; }
+    .empty p  { font-size:12.5px; color:var(--txt3); }
+
+    /* ═══════════════════════════════════════════
+       RESPONSIVE
+       ═══════════════════════════════════════════ */
+    @media (max-width:768px) {
+      .topbar { padding: 0 14px; }
+      .main   { padding: 14px; }
+      .card   { padding: 18px; }
+      .fields { grid-template-columns: 1fr; }
+      th, td  { padding: 9px 11px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Topbar ─── -->
+<header class="topbar">
+  <div class="topbar-icon">
+    <svg viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+  </div>
+  <h1>Stock Checker</h1>
+  <span class="pill">Moneo</span>
+</header>
+
+<!-- ─── Config banner (visible until API_URL is set) ─── -->
+<div class="config-banner" id="configBanner">
+  ⚠️ Set your Apps Script Web App URL in the <code>API_URL</code> variable at the bottom of this file.
+</div>
+
+<!-- ─── Main ─── -->
+<div class="main">
+
+  <!-- Search card -->
+  <div class="card">
+    <div class="card-head">
+      <h2>Search Inventory</h2>
+      <span class="sub">Fill at least one field</span>
+    </div>
+
+    <div class="fields">
+      <div class="fld">
+        <label class="fld-label">Item Code</label>
+        <input class="fld-input" id="fItemCode" placeholder="e.g. 624A19525-001">
+      </div>
+      <div class="fld">
+        <label class="fld-label">Item Name</label>
+        <input class="fld-input" id="fItemName" placeholder="e.g. Ultem, Paint">
+      </div>
+      <div class="fld">
+        <label class="fld-label">Batch Nr</label>
+        <input class="fld-input" id="fBatchNr" placeholder="e.g. B2025-001">
+      </div>
+    </div>
+
+    <div class="loc-panel">
+      <div class="loc-top">
+        <span class="fld-label">Locations</span>
+        <button class="loc-toggle" id="btnToggle" onclick="toggleAll()">Select all</button>
+      </div>
+      <div class="loc-grid" id="locGrid">
+        <span class="loc-msg">Loading locations…</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btnSearch" onclick="doSearch()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Search Stock
+      </button>
+      <button class="btn btn-ghost" onclick="clearForm()">Clear all</button>
+    </div>
+  </div>
+
+  <!-- Message -->
+  <div class="msg" id="msg"></div>
+
+  <!-- Loading -->
+  <div class="loader" id="loader">
+    <div class="spin"></div>
+    <span>Searching inventory…</span>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="results-bar">
+      <b id="rCount"></b>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Item Code</th>
+            <th>Item Name</th>
+            <th>Qty</th>
+            <th>Unit</th>
+            <th>Group</th>
+            <th>Location</th>
+            <th>Best Before</th>
+            <th>Batch Nr</th>
+          </tr>
+        </thead>
+        <tbody id="rBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div class="empty" id="empty">
+    <div class="empty-ring">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+    </div>
+    <h3>No results found</h3>
+    <p>Try adjusting your search criteria or selecting different locations.</p>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// ★  CONFIGURATION  —  paste your deployed Apps Script URL
+// ══════════════════════════════════════════════════════════
+const API_URL = 'https://script.google.com/macros/s/AKfycbzLpoK6SNLJnIbnNQRHtbsbnCxrfk9STTO1XesLduqp4pd9xHwOVN7NQU_8WhRDbxtJBQ/exec';
+//  Example: 'https://script.google.com/macros/s/AKfycbx.../exec'
+// ══════════════════════════════════════════════════════════
+
+let allOn = false;
+
+// ── helpers ──
+const $ = id => document.getElementById(id);
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmtDate(d) {
+  if (!d) return '';
+  try { const dt = new Date(d); return isNaN(dt) ? esc(d) : dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
+  catch(e) { return esc(d); }
+}
+
+// ── api call wrapper (GET with query params, follows redirect) ──
+async function api(params) {
+  const qs = new URLSearchParams(params).toString();
+  const url = API_URL + '?' + qs;
+  const resp = await fetch(url, { redirect: 'follow' });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  return resp.json();
+}
+
+// ── init ──
+window.addEventListener('DOMContentLoaded', () => {
+  // warn if URL not configured
+  if (!API_URL || API_URL.indexOf('YOUR_') === 0) {
+    $('configBanner').style.display = 'block';
+  }
+  loadLocations();
+  ['fItemCode','fItemName','fBatchNr'].forEach(id => {
+    $(id).addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+  });
+});
+
+// ── load locations ──
+async function loadLocations() {
+  try {
+    const res = await api({ action: 'getLocations' });
+    if (!res.success) throw new Error(res.error);
+    renderChips(res.data);
+  } catch (e) {
+    $('locGrid').innerHTML = '<span class="loc-msg" style="color:var(--red)">Failed to load locations</span>';
+  }
+}
+
+function renderChips(locs) {
+  const g = $('locGrid');
+  g.innerHTML = '';
+  locs.forEach(loc => {
+    const c = document.createElement('div');
+    c.className = 'chip';
+    c.dataset.code = loc.code;
+    c.innerHTML = '<input type="checkbox" value="'+loc.code+'"><span class="dot"></span><span>'+esc(loc.name)+'</span>';
+    c.addEventListener('click', () => {
+      const cb = c.querySelector('input');
+      cb.checked = !cb.checked;
+      c.classList.toggle('on', cb.checked);
+      syncToggle();
+    });
+    g.appendChild(c);
+  });
+}
+
+function toggleAll() {
+  allOn = !allOn;
+  document.querySelectorAll('.chip').forEach(c => {
+    c.querySelector('input').checked = allOn;
+    c.classList.toggle('on', allOn);
+  });
+  syncToggle();
+}
+
+function syncToggle() {
+  const total = document.querySelectorAll('.chip input').length;
+  const checked = document.querySelectorAll('.chip input:checked').length;
+  allOn = total > 0 && checked === total;
+  $('btnToggle').textContent = allOn ? 'Deselect all' : 'Select all';
+}
+
+function selectedLocs() {
+  return Array.from(document.querySelectorAll('.chip input:checked')).map(cb => cb.value);
+}
+
+// ── search ──
+async function doSearch() {
+  const code  = $('fItemCode').value.trim();
+  const name  = $('fItemName').value.trim();
+  const batch = $('fBatchNr').value.trim();
+  const locs  = selectedLocs();
+
+  if (!code && !name && !batch) { showMsg('Please fill at least one search field.', 'err'); return; }
+  if (locs.length === 0)        { showMsg('Please select at least one location.', 'err'); return; }
+
+  hideMsg(); hideResults(); hideEmpty();
+  $('loader').style.display = 'flex';
+  $('btnSearch').disabled = true;
+
+  try {
+    const res = await api({
+      action:    'searchStock',
+      itemCode:  code,
+      itemName:  name,
+      batchNr:   batch,
+      locations: locs.join(',')
+    });
+
+    $('loader').style.display = 'none';
+    $('btnSearch').disabled = false;
+
+    if (!res.success) { showMsg(res.error, 'err'); return; }
+    if (!res.data || res.data.length === 0) { showEmpty(); return; }
+
+    renderTable(res.data);
+  } catch (e) {
+    $('loader').style.display = 'none';
+    $('btnSearch').disabled = false;
+    showMsg('Network error: ' + e.message, 'err');
+  }
+}
+
+// ── render table ──
+function renderTable(data) {
+  const tb = $('rBody');
+  tb.innerHTML = '';
+  data.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="mono">'+ esc(r.itemcode) +'</td>'+
+      '<td>'+ esc(r.itemname) +'</td>'+
+      '<td class="qty">'+ esc(String(r.quantity||0)) +'</td>'+
+      '<td>'+ esc(r.unit) +'</td>'+
+      '<td>'+ esc(r.group) +'</td>'+
+      '<td><span class="badge">'+ esc(r.location) +'</span></td>'+
+      '<td class="date">'+ fmtDate(r.bestbefore) +'</td>'+
+      '<td class="mono">'+ esc(r.batchnr) +'</td>';
+    tb.appendChild(tr);
+  });
+  $('rCount').innerHTML = 'Found <em>' + data.length + '</em> item' + (data.length===1?'':'s');
+  $('results').style.display = 'block';
+}
+
+// ── ui helpers ──
+function showMsg(t, cls) { const m=$('msg'); m.textContent=t; m.className='msg '+cls; }
+function hideMsg()       { const m=$('msg'); m.className='msg'; m.style.display='none'; }
+function hideResults()   { $('results').style.display='none'; }
+function showEmpty()     { $('empty').style.display='block'; }
+function hideEmpty()     { $('empty').style.display='none'; }
+
+function clearForm() {
+  $('fItemCode').value='';
+  $('fItemName').value='';
+  $('fBatchNr').value='';
+  document.querySelectorAll('.chip').forEach(c => { c.querySelector('input').checked=false; c.classList.remove('on'); });
+  allOn = false; syncToggle();
+  hideMsg(); hideResults(); hideEmpty();
+}
+</script>
+</body>
+</html>
