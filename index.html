@@ -113,21 +113,53 @@
   </div>
 </div>
 <script>
-// ═══════════════════════════════════════════════════════
-// ★ PASTE YOUR APPS SCRIPT DEPLOYED WEB APP URL HERE ★
-// ═══════════════════════════════════════════════════════
-var API_URL = 'https://script.google.com/macros/s/AKfycbzLpoK6SNLJnIbnNQRHtbsbnCxrfk9STTO1XesLduqp4pd9xHwOVN7NQU_8WhRDbxtJBQ/exec';
-// Example: 'https://script.google.com/macros/s/AKfycbx.../exec'
-// ═══════════════════════════════════════════════════════
-
-var allOn = false;
+var API_URL='https://script.google.com/macros/s/AKfycbzLpoK6SNLJnIbnNQRHtbsbnCxrfk9STTO1XesLduqp4pd9xHwOVN7NQU_8WhRDbxtJBQ/exec';
+var allOn=false;
 function $(id){return document.getElementById(id)}
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function fmtDate(d){if(!d)return'';try{var dt=new Date(d);return isNaN(dt)?esc(d):dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}catch(e){return esc(d)}}
 
-async function api(payload){
-  var resp=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
-  return await resp.json();
+// JSONP-style callback approach for cross-origin Apps Script calls
+var cbCounter=0;
+function apiCall(params){
+  return new Promise(function(resolve,reject){
+    // Build GET URL with query params
+    var qs=Object.keys(params).map(function(k){
+      return encodeURIComponent(k)+'='+encodeURIComponent(
+        Array.isArray(params[k])?params[k].join(','):params[k]
+      );
+    }).join('&');
+    var url=API_URL+'?'+qs;
+
+    // Use a hidden iframe to fetch the data (avoids CORS)
+    var iframe=document.createElement('iframe');
+    iframe.style.display='none';
+    iframe.src=url;
+    document.body.appendChild(iframe);
+
+    // Poll the iframe for content
+    var attempts=0;
+    var maxAttempts=120; // 60 seconds max
+    var timer=setInterval(function(){
+      attempts++;
+      try{
+        var doc=iframe.contentDocument||iframe.contentWindow.document;
+        var text=doc.body?doc.body.innerText||doc.body.textContent:'';
+        if(text&&text.indexOf('{')===0){
+          clearInterval(timer);
+          document.body.removeChild(iframe);
+          try{resolve(JSON.parse(text))}catch(e){reject(new Error('Invalid JSON response'))}
+        }
+      }catch(e){
+        // cross-origin block — expected during redirect
+      }
+      if(attempts>=maxAttempts){
+        clearInterval(timer);
+        try{document.body.removeChild(iframe)}catch(e){}
+        reject(new Error('Request timeout'));
+      }
+    },500);
+  });
 }
 
 window.addEventListener('DOMContentLoaded',function(){
@@ -136,8 +168,13 @@ window.addEventListener('DOMContentLoaded',function(){
 });
 
 async function loadLocations(){
-  try{var res=await api({action:'getLocations'});if(!res.success)throw new Error(res.error);renderChips(res.data)}
-  catch(e){$('locGrid').innerHTML='<span class="loc-msg" style="color:var(--red)">Failed to load locations</span>'}
+  try{
+    var res=await apiCall({action:'getLocations'});
+    if(!res.success)throw new Error(res.error);
+    renderChips(res.data);
+  }catch(e){
+    $('locGrid').innerHTML='<span class="loc-msg" style="color:var(--red)">Failed to load locations: '+esc(e.message)+'</span>';
+  }
 }
 
 function renderChips(locs){
@@ -149,7 +186,6 @@ function renderChips(locs){
     g.appendChild(c);
   });
 }
-
 function toggleAll(){allOn=!allOn;var ch=document.querySelectorAll('.chip');for(var i=0;i<ch.length;i++){ch[i].querySelector('input').checked=allOn;ch[i].classList.toggle('on',allOn)}syncToggle()}
 function syncToggle(){var t=document.querySelectorAll('.chip input').length,c=document.querySelectorAll('.chip input:checked').length;allOn=t>0&&c===t;$('btnToggle').textContent=allOn?'Deselect all':'Select all'}
 function selectedLocs(){var cbs=document.querySelectorAll('.chip input:checked'),a=[];for(var i=0;i<cbs.length;i++)a.push(cbs[i].value);return a}
@@ -160,23 +196,20 @@ async function doSearch(){
   if(locs.length===0){showMsg('Please select at least one location.','err');return}
   hideMsg();hideResults();hideEmpty();$('loader').style.display='flex';$('btnSearch').disabled=true;
   try{
-    var res=await api({action:'searchStock',itemCode:code,itemName:name,batchNr:batch,locations:locs});
+    var res=await apiCall({action:'searchStock',itemCode:code,itemName:name,batchNr:batch,locations:locs.join(',')});
     $('loader').style.display='none';$('btnSearch').disabled=false;
     if(!res.success){showMsg(res.error,'err');return}
     if(!res.data||res.data.length===0){showEmpty();return}
     renderTable(res.data);
-  }catch(e){$('loader').style.display='none';$('btnSearch').disabled=false;showMsg('Network error: '+e.message,'err')}
+  }catch(e){$('loader').style.display='none';$('btnSearch').disabled=false;showMsg('Error: '+e.message,'err')}
 }
-
 function renderTable(data){
   var tb=$('rBody');tb.innerHTML='';
   data.forEach(function(r){var tr=document.createElement('tr');
     tr.innerHTML='<td class="mono">'+esc(r.itemcode)+'</td><td>'+esc(r.itemname)+'</td><td class="qty">'+esc(String(r.quantity||0))+'</td><td>'+esc(r.unit)+'</td><td>'+esc(r.group)+'</td><td><span class="badge">'+esc(r.location)+'</span></td><td class="date">'+fmtDate(r.bestbefore)+'</td><td class="mono">'+esc(r.batchnr)+'</td>';
     tb.appendChild(tr)});
-  $('rCount').innerHTML='Found <em>'+data.length+'</em> item'+(data.length===1?'':'s');
-  $('results').style.display='block';
+  $('rCount').innerHTML='Found <em>'+data.length+'</em> item'+(data.length===1?'':'s');$('results').style.display='block';
 }
-
 function showMsg(t,cls){var m=$('msg');m.textContent=t;m.className='msg '+cls}
 function hideMsg(){var m=$('msg');m.className='msg';m.style.display='none'}
 function hideResults(){$('results').style.display='none'}
