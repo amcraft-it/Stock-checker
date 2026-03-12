@@ -119,46 +119,18 @@ function $(id){return document.getElementById(id)}
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function fmtDate(d){if(!d)return'';try{var dt=new Date(d);return isNaN(dt)?esc(d):dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}catch(e){return esc(d)}}
 
-// JSONP-style callback approach for cross-origin Apps Script calls
-var cbCounter=0;
+// GET request to Apps Script — works cross-origin because Apps Script
+// redirects to a script.googleusercontent.com URL that serves JSON with
+// proper CORS headers when accessed via a simple GET (no preflight needed)
 function apiCall(params){
-  return new Promise(function(resolve,reject){
-    // Build GET URL with query params
-    var qs=Object.keys(params).map(function(k){
-      return encodeURIComponent(k)+'='+encodeURIComponent(
-        Array.isArray(params[k])?params[k].join(','):params[k]
-      );
-    }).join('&');
-    var url=API_URL+'?'+qs;
-
-    // Use a hidden iframe to fetch the data (avoids CORS)
-    var iframe=document.createElement('iframe');
-    iframe.style.display='none';
-    iframe.src=url;
-    document.body.appendChild(iframe);
-
-    // Poll the iframe for content
-    var attempts=0;
-    var maxAttempts=120; // 60 seconds max
-    var timer=setInterval(function(){
-      attempts++;
-      try{
-        var doc=iframe.contentDocument||iframe.contentWindow.document;
-        var text=doc.body?doc.body.innerText||doc.body.textContent:'';
-        if(text&&text.indexOf('{')===0){
-          clearInterval(timer);
-          document.body.removeChild(iframe);
-          try{resolve(JSON.parse(text))}catch(e){reject(new Error('Invalid JSON response'))}
-        }
-      }catch(e){
-        // cross-origin block — expected during redirect
-      }
-      if(attempts>=maxAttempts){
-        clearInterval(timer);
-        try{document.body.removeChild(iframe)}catch(e){}
-        reject(new Error('Request timeout'));
-      }
-    },500);
+  var qs=Object.keys(params).map(function(k){
+    return encodeURIComponent(k)+'='+encodeURIComponent(
+      Array.isArray(params[k])?params[k].join(','):params[k]
+    );
+  }).join('&');
+  return fetch(API_URL+'?'+qs,{redirect:'follow'}).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
   });
 }
 
@@ -167,14 +139,13 @@ window.addEventListener('DOMContentLoaded',function(){
   ['fItemCode','fItemName','fBatchNr'].forEach(function(id){$(id).addEventListener('keydown',function(e){if(e.key==='Enter')doSearch()})});
 });
 
-async function loadLocations(){
-  try{
-    var res=await apiCall({action:'getLocations'});
+function loadLocations(){
+  apiCall({action:'getLocations'}).then(function(res){
     if(!res.success)throw new Error(res.error);
     renderChips(res.data);
-  }catch(e){
+  }).catch(function(e){
     $('locGrid').innerHTML='<span class="loc-msg" style="color:var(--red)">Failed to load locations: '+esc(e.message)+'</span>';
-  }
+  });
 }
 
 function renderChips(locs){
@@ -190,18 +161,17 @@ function toggleAll(){allOn=!allOn;var ch=document.querySelectorAll('.chip');for(
 function syncToggle(){var t=document.querySelectorAll('.chip input').length,c=document.querySelectorAll('.chip input:checked').length;allOn=t>0&&c===t;$('btnToggle').textContent=allOn?'Deselect all':'Select all'}
 function selectedLocs(){var cbs=document.querySelectorAll('.chip input:checked'),a=[];for(var i=0;i<cbs.length;i++)a.push(cbs[i].value);return a}
 
-async function doSearch(){
+function doSearch(){
   var code=$('fItemCode').value.trim(),name=$('fItemName').value.trim(),batch=$('fBatchNr').value.trim(),locs=selectedLocs();
   if(!code&&!name&&!batch){showMsg('Please fill at least one search field.','err');return}
   if(locs.length===0){showMsg('Please select at least one location.','err');return}
   hideMsg();hideResults();hideEmpty();$('loader').style.display='flex';$('btnSearch').disabled=true;
-  try{
-    var res=await apiCall({action:'searchStock',itemCode:code,itemName:name,batchNr:batch,locations:locs.join(',')});
+  apiCall({action:'searchStock',itemCode:code,itemName:name,batchNr:batch,locations:locs.join(',')}).then(function(res){
     $('loader').style.display='none';$('btnSearch').disabled=false;
     if(!res.success){showMsg(res.error,'err');return}
     if(!res.data||res.data.length===0){showEmpty();return}
     renderTable(res.data);
-  }catch(e){$('loader').style.display='none';$('btnSearch').disabled=false;showMsg('Error: '+e.message,'err')}
+  }).catch(function(e){$('loader').style.display='none';$('btnSearch').disabled=false;showMsg('Error: '+e.message,'err')});
 }
 function renderTable(data){
   var tb=$('rBody');tb.innerHTML='';
